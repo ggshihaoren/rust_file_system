@@ -11,4 +11,5 @@ fn main() {
     src.add_file(generate_file("main.rs".to_string(), "/src".to_string(), "hello world".to_string()));
     
     root.ls("".to_string());
+
 }

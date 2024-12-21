@@ -35,7 +35,7 @@ impl Disk {
     pub fn insert_data_in_cluster(&mut self, data:&[u8], cluster: usize) {
         return self.insert_data_in_offset(data, cluster * BLOCK_SIZE);
     }
-
+    // 传入数据，块号，是否插入EOF
     pub fn write_in_clusters(&mut self, data: &[u8], clusters: &[usize], insert_eof: bool) {
         for i in 0..clusters.len() - 1 {
             if i != clusters.len() - 1 {
