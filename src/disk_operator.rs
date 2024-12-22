@@ -1,11 +1,9 @@
-mod disk;
-
-use disk::{Disk, FATItem, BLOCK_SIZE, BLOCK_COUNT, EOF_BYTE};
+use crate::disk::{Disk, FATItem, BLOCK_SIZE};
 
 use ansi_rgb::Foreground;
+use core::panic;
 use serde::{Deserialize, Serialize};
 use std::{fmt, string::String, usize, vec::Vec};
-use core::panic;
 
 pub fn print_info() {
     print!("{}", "[INFO]\t".fg(ansi_rgb::cyan_blue()));
@@ -18,37 +16,37 @@ pub fn print_debug() {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum FileType {
     File,
-    Directory
+    Directory,
 }
 
 impl fmt::Display for FileType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             FileType::Directory => write!(f, "Directory"),
-            FileType::File => write!(f, "File") // 将字符串写入输出流f
+            FileType::File => write!(f, "File"), // 将字符串写入输出流f
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Fcb {
-    name: String, 
+    name: String,
     file_type: FileType,
     first_cluster: usize, // 起始块号
-    length: usize
+    length: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Directory {
     name: String,
-    files: Vec<Fcb>
+    files: Vec<Fcb>,
 }
 
 impl Directory {
     fn new(name: &str) -> Directory {
         Directory {
             name: String::from(name),
-            files: Vec::new()
+            files: Vec::new(),
         }
     }
 
@@ -65,7 +63,7 @@ impl Directory {
 }
 
 impl fmt::Display for Directory {
-    fn fmt (&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "Directory: '{}' Files", self.name)?;
         for file in &self.files {
             writeln!(
@@ -85,7 +83,8 @@ pub struct DiskOperator {
 }
 
 impl DiskOperator {
-    pub fn new(root_dir: Option<Directory>) -> DiskOperator { //初始化新磁盘
+    pub fn new(root_dir: Option<Directory>) -> DiskOperator {
+        //初始化新磁盘
         print_info();
         println!("Creating a new disk...");
 
@@ -106,28 +105,28 @@ impl DiskOperator {
                             name: String::from("."),
                             file_type: FileType::Directory,
                             first_cluster: 0,
-                            length: 0
+                            length: 0,
                         },
                         Fcb {
                             name: String::from(".."),
                             file_type: FileType::Directory,
                             first_cluster: 0,
-                            length: 0
-                        }
-                    ]
-                }
-            }
+                            length: 0,
+                        },
+                    ],
+                },
+            },
         }
-
     }
 
     // 找到第一个unused
     pub fn find_empty_block(&self) -> Option<usize> {
         for i in 0..self.disk.fat.len() {
             if let FATItem::UnUsed = self.disk.fat[i] {
+                return Some(i);
             }
         }
-        None  
+        None
     }
 
     // 分配指定数量的块，返回块号数组
@@ -141,13 +140,13 @@ impl DiskOperator {
                 Some(cluster) => cluster,
                 _ => return Err("No enough space!"),
             });
-            
+
             print_debug();
             println!("Allocated cluster: {}", clusters[i]);
 
             let cur_cluster = clusters[i];
             if i > 0 {
-                self.disk.fat[clusters[i-1]] = FATItem::Cluster(cur_cluster);
+                self.disk.fat[clusters[i - 1]] = FATItem::Cluster(cur_cluster);
             }
             self.disk.fat[cur_cluster] = FATItem::EOF;
         }
@@ -168,16 +167,16 @@ impl DiskOperator {
                 FATItem::Cluster(cluster) => {
                     clusters.push(cluster);
                     cur_cluster = cluster;
-                },
+                }
                 FATItem::EOF => {
                     print_debug();
                     println!("Series end with {}.", cur_cluster);
                     break Ok(clusters);
-                },
+                }
                 FATItem::BadCluster => {
                     cur_cluster += 1;
                     continue;
-                },
+                }
                 _ => {
                     break Err(format!("Unexpected FATItem: {}", cur_cluster));
                 }
@@ -207,7 +206,7 @@ impl DiskOperator {
         }
         (eof, number as usize)
     }
-    
+
     // 写入数据，返回数据开始块号
     pub fn write_to_disk(&mut self, data: &[u8]) -> usize {
         print_info();
@@ -236,32 +235,38 @@ impl DiskOperator {
         // 创新新目录，添加.和..
         let mut new_dir = Directory::new(name);
         // ?
-        new_dir.files.push(Fcb { name: String::from(".."), file_type: FileType::Directory, first_cluster: self.cur_dir.files[1].first_cluster, length: 0 });
+        new_dir.files.push(Fcb {
+            name: String::from("."),
+            file_type: FileType::Directory,
+            first_cluster: self.find_empty_block().unwrap(),
+            length: 0,
+        });
 
-        new_dir.files.push(Fcb { name: String::from("."), file_type: FileType::Directory, first_cluster: self.find_empty_block().unwrap(), length: 0 });
-        
+        new_dir.files.push(Fcb {
+            name: String::from(".."),
+            file_type: FileType::Directory,
+            first_cluster: self.cur_dir.files[0].first_cluster,
+            length: 0,
+        });
+
         // 将新目录序列化后写入磁盘
         let bin_dir = bincode::serialize(&new_dir).unwrap();
 
-        print_debug(); 
-        println!("Dir bytes: {:?}", bin_dir);
         let first_cluster = self.write_to_disk(bin_dir.as_slice());
-
         print_debug();
-        println!("adding FCB to current directory");
+        println!("adding FCB to current directory...");
 
-        self.cur_dir.files.push(Fcb{
+        self.cur_dir.files.push(Fcb {
             name: String::from(name),
             file_type: FileType::Directory,
             first_cluster,
-            length: 0
+            length: 0,
         });
         // 当前文件夹未更新数据写入磁盘，只增加了fcb，写入磁盘的操作在set_current_dir中
         print_debug();
         println!("Directory {} created successfully!", name);
 
         Ok(())
-        
     }
 
     // 根据首块获得数据
@@ -273,7 +278,7 @@ impl DiskOperator {
         let data = self.disk.read_in_clusters(clusters.as_slice());
 
         print_debug();
-        println!("Data {:?} read successfully!", data);
+        println!("Data read successfully!");
 
         data
     }
@@ -291,25 +296,23 @@ impl DiskOperator {
                 println!("Wating to deserialize...");
                 let dir = bincode::deserialize(data.as_slice()).unwrap();
                 dir
-            },
-            _ => panic!("Not a directory!")
+            }
+            _ => panic!("Not a directory!"),
         }
     }
 
     // 通过FCB获取文件
-    fn get_file_by_fcb(&self, fcb: &Fcb) -> Vec<u8>{
+    fn get_file_by_fcb(&self, fcb: &Fcb) -> Vec<u8> {
         print_info();
         println!("Getting file by FCB {:?}...", fcb);
 
         match fcb.file_type {
-            FileType::File => {
-                self.get_data_by_first_cluster(fcb.first_cluster)
-            },
-            _ => panic!("Not a file!")
+            FileType::File => self.get_data_by_first_cluster(fcb.first_cluster),
+            _ => panic!("Not a file!"),
         }
     }
 
-    // 通过FCB删除文件
+    // 通过FCB删除文件,先删除占用的磁盘块，再从当前文件夹删除FCB
     fn delete_file_by_fcb(&mut self, fcb: &Fcb) -> Result<(), String> {
         print_info();
         println!("Deleting file by FCB {:?}...", fcb);
@@ -320,7 +323,7 @@ impl DiskOperator {
                 return Err("Directory is not empty!".to_string());
             }
         }
-        
+
         if let Err(err) = self.delete_series(fcb.first_cluster) {
             return Err(err);
         }
@@ -332,7 +335,6 @@ impl DiskOperator {
             }
             None => {
                 return Err("FCB not found!!".to_string());
- 
             }
         }
 
@@ -340,7 +342,7 @@ impl DiskOperator {
     }
 
     // 当前文件夹创建文件
-    pub fn new_file(&mut self, name: &str, data: &[u8]) -> Result<(), String>{
+    pub fn new_file(&mut self, name: &str, data: &[u8]) -> Result<(), String> {
         print_info();
         println!("Creating new file: {}", name);
 
@@ -354,7 +356,7 @@ impl DiskOperator {
             name: String::from(name),
             file_type: FileType::File,
             first_cluster,
-            length: data.len()
+            length: data.len(),
         };
         self.cur_dir.files.push(new_file);
 
@@ -362,39 +364,35 @@ impl DiskOperator {
     }
 
     // 以文件名读取文件
-    pub fn read_file_by_name(&self, name: &str) -> Result<Vec<u8> ,String> {
+    pub fn read_file_by_name(&self, name: &str) -> Result<Vec<u8>, String> {
         match self.cur_dir.get_fcb(name) {
-            Some((_, fcb)) => {
-                Ok(self.get_file_by_fcb(fcb))
-            },
-            None => {
-                Err("File not found!".to_string())
-            }
+            Some((_, fcb)) => Ok(self.get_file_by_fcb(fcb)),
+            None => Err("File not found!".to_string()),
         }
     }
 
     pub fn delete_file_by_name(&mut self, name: &str) -> Result<(), String> {
         let fcb = match self.cur_dir.get_fcb(name) {
             Some((_, fcb)) => fcb.clone(),
-            None => return Err("File not found!".to_string())
-            
+            None => return Err("File not found!".to_string()),
         };
         let _ = self.delete_file_by_fcb(&fcb);
         Ok(())
     }
 
     // 将文件夹保存至磁盘，返回初始块号
-    pub fn save_dir_to_disk(&mut self, dir: &Directory) -> usize {
+    fn save_dir_to_disk(&mut self, dir: &Directory) -> usize {
         print_debug();
         println!("Saving directory to disk...");
 
         let data = bincode::serialize(dir).unwrap();
         let (eof, blocks_number) = DiskOperator::calculate_blocks_with_eof(data.len());
         // 重新分配块
-        let _ = self.delete_series(self.cur_dir.files[1].first_cluster);
-        
+        let _ = self.delete_series(self.cur_dir.files[0].first_cluster);
+
         let clusters = self.allocate_block(blocks_number).unwrap();
-        self.disk.write_in_clusters(data.as_slice(), clusters.as_slice(), eof);
+        self.disk
+            .write_in_clusters(data.as_slice(), clusters.as_slice(), eof);
 
         clusters[0]
     }
@@ -422,15 +420,15 @@ impl DiskOperator {
     }
 
     // 获取磁盘大小，已分配，未分配数量
-    pub fn get_disk_info(&self) -> (usize, usize, usize){
+    pub fn get_disk_info(&self) -> (usize, usize, usize) {
         let disk_size = self.disk.fat.len();
         let mut used = 0;
         let mut unused = 0;
         for item in &self.disk.fat {
             match item {
-                FATItem::UnUsed => unused += 1 ,
+                FATItem::UnUsed => unused += 1,
                 FATItem::BadCluster => continue,
-                _ => used += 1
+                _ => used += 1,
             }
         }
 
@@ -438,8 +436,4 @@ impl DiskOperator {
     }
 
     // 通过文件名将文件移动至指定文件夹
-
-
-
-
 }
