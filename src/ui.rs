@@ -3,25 +3,44 @@ use disk_operator::*;
 use crate::disk::BLOCK_SIZE;
 
 use std::{fs, io::{stdin, stdout, Write}};
+use lazy_static::lazy_static;
+use std::sync::Mutex;
 
-pub fn load_ui(filename: &str) -> DiskOperator {
+
+
+// pub static mut VIRTUAL_DISK_NAME: &str = "./file-system.vd";
+lazy_static! {
+    pub static ref VIRTUAL_DISK_NAME: Mutex<&'static str> = Mutex::new("./file-system.vd");
+}
+
+pub fn load_ui() -> DiskOperator {
     let mut buffer = String::new();
     loop {
         print_info();
-        print!("Load file-system.vd? [y/n]: ");
+        print!("Load default file-system.vd? [y/n]: ");
         stdout().flush().unwrap();
         stdin().read_line(&mut buffer).unwrap();
         let input = buffer.as_str().trim().chars().next().unwrap();
 
         match input {
             'Y' | 'y' => {
-                println!();
+                print_info();
                 println!("Loading file-system.vd...");
-                let data = fs::read(filename).unwrap();
+                let data = fs::read(VIRTUAL_DISK_NAME.lock().unwrap().clone()).unwrap();
                 break bincode::deserialize(data.as_slice()).unwrap();
             },
             'N' | 'n' => {
                 print_info();
+                print!("Input the name of new virtual disk: ");
+                stdout().flush().unwrap();
+                let mut filename = String::new();
+                stdin().read_line(&mut filename).unwrap();
+                // unsafe {
+                    // VIRTUAL_DISK_NAME = Box::leak(buffer.trim().to_string().into_boxed_str());
+                // }
+                let mut disk_name = VIRTUAL_DISK_NAME.lock().unwrap();
+                *disk_name = Box::leak(filename.trim().to_string().into_boxed_str());
+                print_debug();
                 println!("Creating new file-system.vd...");
                 break DiskOperator::new(None);
             },
@@ -51,8 +70,6 @@ const UI_INIT: &str = "\
 \n\texit : Exit the system. 
 \n"; // UI主菜单
 
-pub const SAVE_FILE_NAME: &str = "./file-system.vd";
-
 pub fn interact_with_user(vd: &mut DiskOperator) {
     println!("{}", UI_INIT);
     
@@ -76,7 +93,10 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
             print_info();
             println!("Saving file-system.vd...");
             let data = bincode::serialize(&vd).unwrap();
-            fs::write(SAVE_FILE_NAME, data.as_slice()).unwrap();
+            // unsafe {
+            //     fs::write(VIRTUAL_DISK_NAME, data.as_slice()).unwrap();
+            // }
+            fs::write(VIRTUAL_DISK_NAME.lock().unwrap().clone(), data.as_slice()).unwrap();
             print_info();
             println!("File saved.");
         }
