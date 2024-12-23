@@ -415,7 +415,7 @@ impl DiskOperator {
             };
             self.cur_dir.files[index] = new_fcb;
         } else {
-            eprintln!("FCB not found for name: {}", old);
+            println!("FCB not found for name: {}", old);
         }
     }
 
@@ -435,5 +435,40 @@ impl DiskOperator {
         (disk_size, used, unused)
     }
 
-    // 通过文件名将文件移动至指定文件夹
+    // 移动文件
+    pub fn move_file_by_name(&mut self, name: &str, path: &str) {
+        let (_, index) = match self.cur_dir.get_fcb(name) {
+            Some((index, fcb)) => (fcb.clone(), index),
+            None => {
+                println!("File not found!");
+                return;
+            }
+        };
+        // 删除当前文件夹的FCB, 保存更改后的当前文件夹至磁盘
+        let fcb = self.cur_dir.files.remove(index);
+        self.save_dir_to_disk(&self.cur_dir.clone());
+
+        // 通过路径找到目标文件夹
+        let path: Vec<&str> = path.split('/').collect();
+        let mut cur_dir = self.cur_dir.clone();
+        for dir in path {
+            if dir == "" {
+                continue;
+            }
+            else {
+                let (_, fcb1) = cur_dir.get_fcb(dir).unwrap();
+                cur_dir = self.get_directory_by_fcb(fcb1);
+            }
+        }
+
+        // 将文件FCB添加至目标文件夹
+        cur_dir.files.push(fcb);
+        let data = bincode::serialize(&cur_dir).unwrap();
+        let (eof, blocks_number) = DiskOperator::calculate_blocks_with_eof(data.len());
+        self.delete_series(cur_dir.files[0].first_cluster).unwrap();
+        let clusters = self.allocate_block(blocks_number).unwrap();
+        self.disk.write_in_clusters(data.as_slice(), clusters.as_slice(), eof);
+
+    }
+
 }

@@ -114,6 +114,20 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
             println!("Used Size: {} bytes", used_size * BLOCK_SIZE);
             println!("Unused Size: {} bytes", unused_size * BLOCK_SIZE);
         }
+        else if let Some(name) = args.strip_prefix("mv ") {
+            let name: Vec<&str> = name.split(" ").collect();
+            if name.len() != 2 {
+                println!("Invalid command, please try again.");
+                continue;
+            }
+            // 移动与重命名
+            if name[1].contains("/") {
+                vd.move_file_by_name(name[0], name[1]);
+            }
+            else {
+                vd.rename_file(name[0], name[1]);
+            }
+        }
         else {
             println!("Invalid command, please try again.");
         }
