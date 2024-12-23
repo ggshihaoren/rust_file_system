@@ -35,26 +35,20 @@ pub fn load_ui(filename: &str) -> DiskOperator {
 
 const UI_INIT: &str = "\
 \n==================================================\
-\n           Simple File System\
+\n         Simple File System in Rust\
 \n==================================================\
-\nHelp:\
+\nCommands:\
 \n\tcd <dirname>: Change current dir.\
-\n\tmkdir <dir name>: Create a new dir.\
+\n\tmkdir <dirname>: Create a new dir.\
 \n\tls : List all files and dir in current dir.\
+\n\ttouch <filename> <data>: Create a new file.\
 \n\tcat <filename>: Show the file content.\
 \n\trm <filename>: Delete a file on disk.\
+\n\tcp <src> <dst>: Copy a file.\
+\n\tmv <src> <dst>: Move a file.\
 \n\tdiskinfo : Show some info about disk.\
 \n\tsave : Save this virtual disk to file 'file-sys.vd'\
 \n\texit : Exit the system. 
-\n\
-\nTesting:\
-\n\ttest create: Create a random file to test.\
-\n\
-\nSystem Inner Function:\
-\n\tfn create_file_with_data(&mut self, name: &str, data: &[u8])\
-\n\tfn rename_file(&mut self, old: &str, new: &str)\
-\n\tfn delete_file_by_name(&mut self, name: &str)\
-\n\tfn read_file_by_name(&self, name: &str) -> Vec<u8>\
 \n"; // UI主菜单
 
 pub const SAVE_FILE_NAME: &str = "./file-system.vd";
@@ -68,7 +62,7 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
         print!("$ ");
         stdout().flush().unwrap();
         stdin().read_line(&mut input).unwrap();
-        let mut args = String::from(input.trim());
+        let args = String::from(input.trim());
         
         if args.starts_with("help") {
             println!("{}", UI_INIT);
@@ -114,6 +108,14 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
             println!("Used Size: {} bytes", used_size * BLOCK_SIZE);
             println!("Unused Size: {} bytes", unused_size * BLOCK_SIZE);
         }
+        else if let Some(name) = args.strip_prefix("cp ") {
+            let name: Vec<&str> = name.split(" ").collect();
+            if name.len() != 2 {
+                println!("Invalid command, please try again.");
+                continue;
+            }
+            vd.copy_file_by_name(name[0], name[1]);
+        }
         else if let Some(name) = args.strip_prefix("mv ") {
             let name: Vec<&str> = name.split(" ").collect();
             if name.len() != 2 {
@@ -125,8 +127,31 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
                 vd.move_file_by_name(name[0], name[1]);
             }
             else {
-                vd.rename_file(name[0], name[1]);
+                if let FileType::Directory = vd.cur_dir.get_file_type(name[1]).unwrap() {
+                    vd.move_file_by_name(name[0], name[1]);
+                }
+                else {
+                    vd.rename_file(name[0], name[1]);
+                }
             }
+        }
+        else if let Some(name) = args.strip_prefix("cat ") {
+            let data = vd.read_file_by_name(name.trim()).unwrap();
+            println!("{}", String::from_utf8(data).unwrap());
+        }
+        else if let Some(name) = args.strip_prefix("touch ") {
+            let mut index = 0;
+            for i in name.trim().chars() {
+                if i == ' ' {
+                    break;
+                }
+                index += 1;
+            }
+            let file_name = &name.trim()[..index];
+            let mut data = String::from(&name.trim()[index+1..]);
+            let time: String = format!("\nGnerated at {:?}.", chrono::Local::now());
+            data.push_str(&time);
+            vd.new_file(file_name, data.as_bytes()).unwrap();
         }
         else {
             println!("Invalid command, please try again.");

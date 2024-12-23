@@ -60,6 +60,13 @@ impl Directory {
         }
         result
     }
+
+    pub fn get_file_type(&self, name: &str) -> Option<FileType> {
+        match self.get_fcb(name) {
+            Some((_, fcb)) => Some(fcb.file_type.clone()),
+            None => None,
+        }
+    }
 }
 
 impl fmt::Display for Directory {
@@ -292,8 +299,6 @@ impl DiskOperator {
             FileType::Directory => {
                 let data = self.get_data_by_first_cluster(fcb.first_cluster);
                 // 反序列化
-                print_debug();
-                println!("Wating to deserialize...");
                 let dir = bincode::deserialize(data.as_slice()).unwrap();
                 dir
             }
@@ -317,7 +322,7 @@ impl DiskOperator {
         print_info();
         println!("Deleting file by FCB {:?}...", fcb);
 
-        if let FileType::File = fcb.file_type {
+        if let FileType::Directory = fcb.file_type {
             let dir = self.get_directory_by_fcb(fcb);
             if dir.files.len() > 2 {
                 return Err("Directory is not empty!".to_string());
@@ -346,19 +351,19 @@ impl DiskOperator {
         print_info();
         println!("Creating new file: {}", name);
 
-        if self.cur_dir.get_fcb(name).is_none() {
+        if self.cur_dir.get_fcb(name).is_some() {
             return Err("File already exists!".to_string());
         }
 
         // 写入数据
         let first_cluster = self.write_to_disk(data);
-        let new_file = Fcb {
+        let new_file_fcb = Fcb {
             name: String::from(name),
             file_type: FileType::File,
             first_cluster,
             length: data.len(),
         };
-        self.cur_dir.files.push(new_file);
+        self.cur_dir.files.push(new_file_fcb);
 
         Ok(())
     }
@@ -372,6 +377,8 @@ impl DiskOperator {
     }
 
     pub fn delete_file_by_name(&mut self, name: &str) -> Result<(), String> {
+        print_debug();
+        println!("Deleting file by name: {}, cur_dir: {}", name,self.cur_dir.name);
         let fcb = match self.cur_dir.get_fcb(name) {
             Some((_, fcb)) => fcb.clone(),
             None => return Err("File not found!".to_string()),
@@ -435,17 +442,64 @@ impl DiskOperator {
         (disk_size, used, unused)
     }
 
-    // 移动文件
-    pub fn move_file_by_name(&mut self, name: &str, path: &str) {
-        let (_, index) = match self.cur_dir.get_fcb(name) {
+    // 复制文件
+    pub fn copy_file_by_name(&mut self, name: &str, path: &str) {
+        let (fcb, _) = match self.cur_dir.get_fcb(name) {
             Some((index, fcb)) => (fcb.clone(), index),
             None => {
                 println!("File not found!");
                 return;
             }
         };
-        // 删除当前文件夹的FCB, 保存更改后的当前文件夹至磁盘
-        let fcb = self.cur_dir.files.remove(index);
+
+        // 通过路径找到目标文件夹
+        let path: Vec<&str> = path.split('/').collect();
+        let mut cur_dir = self.cur_dir.clone();
+        for dir in path {
+            if dir == "" {
+                continue;
+            }
+            else {
+                let (_, fcb1) = cur_dir.get_fcb(dir).unwrap();
+                cur_dir = self.get_directory_by_fcb(fcb1);
+            }
+        }
+        
+        // 在目标文件夹新建文件并写入数据
+        let data = self.get_file_by_fcb(&fcb);
+        let file_name = fcb.name.clone();
+        if cur_dir.get_fcb(name).is_some() {
+            println!("File already exists!");
+            return;
+        }
+        // 写入数据
+        let first_cluster = self.write_to_disk(data.as_slice());
+        let new_file_fcb = Fcb {
+            name: String::from(file_name),
+            file_type: FileType::File,
+            first_cluster,
+            length: data.len(),
+        };
+        cur_dir.files.push(new_file_fcb);
+        
+        // 将写入新数据的文件夹重新写入磁盘
+        let data = bincode::serialize(&cur_dir).unwrap();
+        let (eof, blocks_number) = DiskOperator::calculate_blocks_with_eof(data.len());
+        self.delete_series(cur_dir.files[0].first_cluster).unwrap();
+        let clusters = self.allocate_block(blocks_number).unwrap();
+        self.disk.write_in_clusters(data.as_slice(), clusters.as_slice(), eof);
+
+    }
+
+    pub fn move_file_by_name(&mut self, name: &str, path: &str) {
+        let (fcb, index) = match self.cur_dir.get_fcb(name) {
+            Some((index, fcb)) => (fcb.clone(), index),
+            None => {
+                println!("File not found!");
+                return;
+            }
+        };
+        self.cur_dir.files.remove(index);
         self.save_dir_to_disk(&self.cur_dir.clone());
 
         // 通过路径找到目标文件夹
@@ -461,8 +515,15 @@ impl DiskOperator {
             }
         }
 
+        if cur_dir.get_fcb(name).is_some() {
+            self.cur_dir.files.push(fcb.clone());
+            self.save_dir_to_disk(&self.cur_dir.clone());
+            println!("File already exists!");
+            return;
+        }
+
         // 将文件FCB添加至目标文件夹
-        cur_dir.files.push(fcb);
+        cur_dir.files.push(fcb.clone());
         let data = bincode::serialize(&cur_dir).unwrap();
         let (eof, blocks_number) = DiskOperator::calculate_blocks_with_eof(data.len());
         self.delete_series(cur_dir.files[0].first_cluster).unwrap();
