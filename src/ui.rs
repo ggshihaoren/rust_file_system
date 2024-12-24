@@ -108,13 +108,13 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
             println!("File saved.");
         }
         else if let Some(name) = args.strip_prefix("cd ") {
-            print_info();
-            println!("Changing dir to {}...", name);
+            // print_info();
+            // println!("Changing dir to {}...", name);
             vd.set_current_dir(name);
         }
         else if let Some(name) = args.strip_prefix("mkdir ") {
-            print_info();
-            println!("Creating dir {}...", name);
+            // print_info();
+            // println!("Creating dir {}...", name);
             vd.new_directory(name).unwrap();
         }
         else if args.starts_with("ls") {
@@ -126,8 +126,8 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
         }
         else if let Some(name) = args.strip_prefix("rm ") {
             vd.delete_file_by_name(name.trim()).expect("Error: Delete Failed.");
-            print_info();
-            println!("File {} deleted.", name);
+            // print_info();
+            // println!("File {} deleted.", name);
         }
         else if args.starts_with("diskinfo") {
             let (disk_size, used_size, unused_size) = vd.get_disk_info();
