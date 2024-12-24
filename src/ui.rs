@@ -5,7 +5,7 @@ use crate::disk::BLOCK_SIZE;
 use std::{fs, io::{stdin, stdout, Write}};
 use lazy_static::lazy_static;
 use std::sync::Mutex;
-
+use ansi_rgb::Foreground;
 
 
 // pub static mut VIRTUAL_DISK_NAME: &str = "./file-system.vd";
@@ -83,7 +83,10 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
     let mut input = String::new();
     loop {
         input.clear();
-        print!("$ ");
+        print!("{}", "[PATH] ".fg(ansi_rgb::yellow()));
+        println!("{}", vd.get_abs_path());
+        print!("{}", "$ ".fg(ansi_rgb::red()));
+
         stdout().flush().unwrap();
         stdin().read_line(&mut input).unwrap();
         let args = String::from(input.trim());

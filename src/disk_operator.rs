@@ -553,4 +553,19 @@ impl DiskOperator {
 
     }
 
+    // 输出当前绝对路径
+    pub fn get_abs_path(&self) -> String {
+        let mut path = String::from("");
+        let mut cur_dir = self.cur_dir.clone();
+        while cur_dir.name != "root" {
+            path = format!("/{}/{}", cur_dir.name, path);
+            let (_, fcb) = cur_dir.get_fcb("..").unwrap();
+            cur_dir = self.get_directory_by_fcb(fcb);
+        }
+        path = format!("/root{}", path);
+        if path.chars().last() == Some('/') {
+            path.pop();
+        }
+        path
+    }
 }
