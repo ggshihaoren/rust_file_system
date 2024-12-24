@@ -17,7 +17,7 @@ pub fn load_ui() -> DiskOperator {
     let mut buffer = String::new();
     loop {
         print_info();
-        print!("Load default file-system.vd? [y/n]: ");
+        print!("Load specified file-system.vd? [y/n]: ");
         stdout().flush().unwrap();
         stdin().read_line(&mut buffer).unwrap();
         let input = buffer.as_str().trim().chars().next().unwrap();
@@ -25,8 +25,15 @@ pub fn load_ui() -> DiskOperator {
         match input {
             'Y' | 'y' => {
                 print_info();
-                println!("Loading file-system.vd...");
-                let data = fs::read(VIRTUAL_DISK_NAME.lock().unwrap().clone()).unwrap();
+                print!("Input the name of your virtual disk: ");
+                stdout().flush().unwrap();
+                let mut filename = String::new();
+                stdin().read_line(&mut filename).unwrap();
+                let mut disk_name = VIRTUAL_DISK_NAME.lock().unwrap();
+                *disk_name = Box::leak(filename.trim().to_string().into_boxed_str());
+                let data = fs::read(*disk_name).unwrap();
+                print_info();
+                println!("Loading {}...", *disk_name);
                 break bincode::deserialize(data.as_slice()).unwrap();
             },
             'N' | 'n' => {
@@ -41,7 +48,7 @@ pub fn load_ui() -> DiskOperator {
                 let mut disk_name = VIRTUAL_DISK_NAME.lock().unwrap();
                 *disk_name = Box::leak(filename.trim().to_string().into_boxed_str());
                 print_debug();
-                println!("Creating new file-system.vd...");
+                println!("Creating new {}...", *disk_name);
                 break DiskOperator::new(None);
             },
             _ => {
@@ -66,7 +73,7 @@ const UI_INIT: &str = "\
 \n\tcp <src> <dst>: Copy a file.\
 \n\tmv <src> <dst>: Move a file.\
 \n\tdiskinfo : Show some info about disk.\
-\n\tsave : Save this virtual disk to file 'file-sys.vd'\
+\n\tsave : Save this virtual disk to file.\
 \n\texit : Exit the system. 
 \n"; // UI主菜单
 
@@ -91,7 +98,7 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
         }
         else if args.starts_with("save") {
             print_info();
-            println!("Saving file-system.vd...");
+            println!("Saving {}...", VIRTUAL_DISK_NAME.lock().unwrap().clone());
             let data = bincode::serialize(&vd).unwrap();
             // unsafe {
             //     fs::write(VIRTUAL_DISK_NAME, data.as_slice()).unwrap();

@@ -364,6 +364,16 @@ impl DiskOperator {
             length: data.len(),
         };
         self.cur_dir.files.push(new_file_fcb);
+        
+        // 更新文件夹大小，将写入新数据的文件夹重新写入磁盘
+        // let add_length = data.len();
+        // let mut cur_dir = self.cur_dir.clone();
+        // cur_dir.files[0].length += add_length;
+        // let data = bincode::serialize(&cur_dir).unwrap();
+        // let (eof, blocks_number) = DiskOperator::calculate_blocks_with_eof(data.len());
+        // self.delete_series(cur_dir.files[0].first_cluster).unwrap();
+        // let clusters = self.allocate_block(blocks_number).unwrap();
+        // self.disk.write_in_clusters(data.as_slice(), clusters.as_slice(), eof);
 
         Ok(())
     }
@@ -383,7 +393,17 @@ impl DiskOperator {
             Some((_, fcb)) => fcb.clone(),
             None => return Err("File not found!".to_string()),
         };
+        // let decrease_length = fcb.clone().length;
+        // self.cur_dir.files[0].length -= decrease_length;
         let _ = self.delete_file_by_fcb(&fcb);
+
+        // let cur_dir = self.cur_dir.clone();
+        // let data = bincode::serialize(&cur_dir).unwrap();
+        // let (eof, blocks_number) = DiskOperator::calculate_blocks_with_eof(data.len());
+        // self.delete_series(cur_dir.files[0].first_cluster).unwrap();
+        // let clusters = self.allocate_block(blocks_number).unwrap();
+        // self.disk.write_in_clusters(data.as_slice(), clusters.as_slice(), eof);
+
         Ok(())
     }
 
@@ -406,6 +426,11 @@ impl DiskOperator {
 
     // 保存当前文件夹至磁盘,并以文件夹名称切换当前文件夹
     pub fn set_current_dir(&mut self, name: &str) {
+        // let mut size = 0;
+        // for i in 2 .. self.cur_dir.files.len() {
+        //     size += self.cur_dir.files[i].length;
+        // }
+        // self.cur_dir.files[0].length = size;
         let dir = self.cur_dir.clone();
         self.save_dir_to_disk(&dir);
 
@@ -481,6 +506,9 @@ impl DiskOperator {
             length: data.len(),
         };
         cur_dir.files.push(new_file_fcb);
+
+        // let add_length = data.len();
+        // cur_dir.files[0].length += add_length;
         
         // 将写入新数据的文件夹重新写入磁盘
         let data = bincode::serialize(&cur_dir).unwrap();
@@ -522,6 +550,8 @@ impl DiskOperator {
             return;
         }
 
+        // let add_length = fcb.length;
+        // cur_dir.files[0].length += add_length;
         // 将文件FCB添加至目标文件夹
         cur_dir.files.push(fcb.clone());
         let data = bincode::serialize(&cur_dir).unwrap();
