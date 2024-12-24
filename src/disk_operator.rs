@@ -13,7 +13,7 @@ pub fn print_debug() {
     print!("{}", "[DEBUG]\t".fg(ansi_rgb::magenta()));
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum FileType {
     File,
     Directory,
@@ -71,13 +71,31 @@ impl Directory {
 
 impl fmt::Display for Directory {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "Directory: '{}' Files", self.name)?;
+        writeln!(f, "Directory: \t Files")?;
         for file in &self.files {
-            writeln!(
-                f,
-                "{}\t\t{}\t\tLength: {}",
-                file.name, file.file_type, file.length
-            )?;
+            if file.file_type == FileType::Directory {
+                if file.name == "." || file.name == ".." {
+                    writeln!(
+                        f,
+                        "{}\t\t{}\t\tLength: {}",
+                        file.name, file.file_type, 0
+                    )?;
+                }
+                else {
+                    writeln!(
+                        f,
+                        "{}\t\t{}\t\tLength: {}",
+                        file.name, file.file_type, file.length
+                    )?;
+                }
+            }
+            else {
+                writeln!(
+                    f,
+                    "{}\t\t{}\t\t\tLength: {}",
+                    file.name, file.file_type, file.length
+                )?;
+            }
         }
         fmt::Result::Ok(())
     }

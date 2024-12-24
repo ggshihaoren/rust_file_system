@@ -60,9 +60,9 @@ pub fn load_ui() -> DiskOperator {
 }
 
 const UI_INIT: &str = "\
-\n==================================================\
+\n**************************************************\
 \n         Simple File System in Rust\
-\n==================================================\
+\n**************************************************\
 \nCommands:\
 \n\tcd <dirname>: Change current dir.\
 \n\tmkdir <dirname>: Create a new dir.\
@@ -157,7 +157,7 @@ pub fn interact_with_user(vd: &mut DiskOperator) {
                 vd.move_file_by_name(name[0], name[1]);
             }
             else {
-                if let FileType::Directory = vd.cur_dir.get_file_type(name[1]).unwrap() {
+                if vd.cur_dir.get_file_type(name[1]).is_some() {
                     vd.move_file_by_name(name[0], name[1]);
                 }
                 else {
